@@ -19,13 +19,12 @@ package org.jclouds.glacier;
 import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.util.concurrent.MoreExecutors.sameThreadExecutor;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.mws.api.Assertions.assertThat;
 import static org.jclouds.Constants.PROPERTY_MAX_RETRIES;
 import static org.jclouds.Constants.PROPERTY_SO_TIMEOUT;
 import static org.jclouds.glacier.util.TestUtils.MiB;
 import static org.jclouds.glacier.util.TestUtils.buildPayload;
 import static org.jclouds.util.Strings2.urlEncode;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
 import java.io.IOException;
@@ -76,7 +75,6 @@ public class GlacierClientMockTest {
 
    private static final String REQUEST_ID = "AAABZpJrTyioDC_HsOmHae8EZp_uBSJr6cnGOLKp_XJCl-Q";
    private static final String DATE = "Sun, 25 Mar 2012 12:00:00 GMT";
-   private static final String HTTP = "HTTP/1.1";
    private static final String VAULT_NAME = "examplevault";
    private static final String VAULT_NAME1 = "examplevault1";
    private static final String VAULT_NAME2 = "examplevault2";
@@ -96,7 +94,7 @@ public class GlacierClientMockTest {
    private static final String MARKER = "xsQdFIRsfJr20CW2AbZBKpRZAFTZSJIMtL2hYf8mvp8dM0m4RUzlaqoEye6g3h3ecqB_zqwB7zLDMeSWhwo65re4C4Ev";
    private static final String JOB_ID = "HkF9p6o7yjhFx-K3CGl6fuSm6VzW9T7esGQfco8nUXVYwS0jlb5gq1JZ55yHgt5vP54ZShjoQzQVVh7vEXAMPLEjobID";
    private static final Set<Module> modules = ImmutableSet.<Module> of(new ExecutorServiceModule(sameThreadExecutor(),
-         sameThreadExecutor()));
+           sameThreadExecutor()));
 
    private MockWebServer server;
    private GlacierClient client;
@@ -107,7 +105,7 @@ public class GlacierClientMockTest {
       overrides.setProperty(PROPERTY_SO_TIMEOUT, "0");
       overrides.setProperty(PROPERTY_MAX_RETRIES, "1");
       return ContextBuilder.newBuilder("glacier").credentials("accessKey", "secretKey").endpoint(server.toString())
-            .modules(modules).overrides(overrides).buildApi(GlacierClient.class);
+              .modules(modules).overrides(overrides).buildApi(GlacierClient.class);
    }
 
    private static MockResponse buildBaseResponse(int responseCode) {
@@ -142,7 +140,9 @@ public class GlacierClientMockTest {
 
       assertThat(client.createVault(VAULT_NAME)).isEqualTo(URI.create(server.getUrl("/") + VAULT_LOCATION.substring(1)));
 
-      assertEquals(server.takeRequest().getRequestLine(), "PUT /-/vaults/" + VAULT_NAME + " " + HTTP);
+      assertThat(server.takeRequest())
+              .isPUT()
+              .isPointingTo("/-/vaults/" + VAULT_NAME);
    }
 
    @Test
@@ -151,7 +151,9 @@ public class GlacierClientMockTest {
 
       assertThat(client.deleteVault(VAULT_NAME)).isTrue();
 
-      assertEquals(server.takeRequest().getRequestLine(), "DELETE /-/vaults/" + VAULT_NAME + " " + HTTP);
+      assertThat(server.takeRequest())
+              .isDELETE()
+              .isPointingTo("/-/vaults/" + VAULT_NAME);
    }
 
    @Test
@@ -168,7 +170,9 @@ public class GlacierClientMockTest {
       assertThat(vault.getSizeInBytes()).isEqualTo(78088912);
       assertThat(vault.getNumberOfArchives()).isEqualTo(192);
 
-      assertEquals(server.takeRequest().getRequestLine(), "GET /-/vaults/" + VAULT_NAME + " " + HTTP);
+      assertThat(server.takeRequest())
+              .isGET()
+              .isPointingTo("/-/vaults/" + VAULT_NAME);
    }
 
    @Test
@@ -181,7 +185,9 @@ public class GlacierClientMockTest {
 
       assertThat(client.listVaults()).extracting("vaultName").containsExactly(VAULT_NAME1, VAULT_NAME2, VAULT_NAME3);
 
-      assertEquals(server.takeRequest().getRequestLine(), "GET /-/vaults " + HTTP);
+      assertThat(server.takeRequest())
+              .isGET()
+              .isPointingTo("/-/vaults");
    }
 
    @Test
@@ -207,8 +213,9 @@ public class GlacierClientMockTest {
       assertThat(vaults).extracting("vaultName").containsExactly(VAULT_NAME1, VAULT_NAME2);
       assertThat(vaults.nextMarker().get()).isEqualTo(VAULT_ARN3);
 
-      assertEquals(server.takeRequest().getRequestLine(),
-              "GET /-/vaults?limit=2&marker=" + urlEncode(VAULT_ARN1, '/') + " " + HTTP);
+      assertThat(server.takeRequest())
+              .isGET()
+              .isPointingTo("/-/vaults?limit=2&marker=" + urlEncode(VAULT_ARN1, '/'));
    }
 
    @Test
@@ -221,11 +228,11 @@ public class GlacierClientMockTest {
 
       assertThat(client.uploadArchive(VAULT_NAME, buildPayload(10), DESCRIPTION)).isEqualTo(ARCHIVE_ID);
 
-      RecordedRequest request = server.takeRequest();
-      assertEquals(request.getRequestLine(), "POST /-/vaults/" + VAULT_NAME + "/archives " + HTTP);
-      assertEquals(request.getHeader(GlacierHeaders.ARCHIVE_DESCRIPTION), DESCRIPTION);
-      assertNotNull(request.getHeaders(GlacierHeaders.TREE_HASH));
-      assertNotNull(request.getHeaders(GlacierHeaders.LINEAR_HASH));
+      assertThat(server.takeRequest())
+              .isPOST()
+              .isPointingTo("/-/vaults/" + VAULT_NAME + "/archives")
+              .hasHeaders(GlacierHeaders.TREE_HASH, GlacierHeaders.LINEAR_HASH)
+              .hasHeader(GlacierHeaders.ARCHIVE_DESCRIPTION).withValue(DESCRIPTION);
    }
 
    @Test
@@ -235,7 +242,9 @@ public class GlacierClientMockTest {
 
       assertThat(client.deleteArchive(VAULT_NAME, ARCHIVE_ID)).isTrue();
 
-      assertEquals(server.takeRequest().getRequestLine(), "DELETE /-/vaults/" + VAULT_NAME + "/archives/" + ARCHIVE_ID + " " + HTTP);
+      assertThat(server.takeRequest())
+              .isDELETE()
+              .isPointingTo("/-/vaults/" + VAULT_NAME + "/archives/" + ARCHIVE_ID);
    }
 
    @Test
@@ -247,10 +256,11 @@ public class GlacierClientMockTest {
 
       assertThat(client.initiateMultipartUpload(VAULT_NAME, 4, DESCRIPTION)).isEqualTo(MULTIPART_UPLOAD_ID);
 
-      RecordedRequest request = server.takeRequest();
-      assertEquals(request.getRequestLine(), "POST /-/vaults/" + VAULT_NAME + "/multipart-uploads " + HTTP);
-      assertEquals(request.getHeader(GlacierHeaders.PART_SIZE), "4194304");
-      assertEquals(request.getHeader(GlacierHeaders.ARCHIVE_DESCRIPTION), DESCRIPTION);
+      assertThat(server.takeRequest())
+              .isPOST()
+              .isPointingTo("/-/vaults/" + VAULT_NAME + "/multipart-uploads")
+              .hasHeaders(GlacierHeaders.PART_SIZE, GlacierHeaders.ARCHIVE_DESCRIPTION)
+              .withValues("4194304", DESCRIPTION);
    }
 
    @Test
@@ -262,11 +272,11 @@ public class GlacierClientMockTest {
       assertThat(client.uploadPart(VAULT_NAME, MULTIPART_UPLOAD_ID, ContentRange.fromPartNumber(0, 4),
               buildPayload(4 * MiB))).isEqualTo(TREEHASH);
 
-      RecordedRequest request = server.takeRequest();
-      assertEquals(request.getRequestLine(),
-            "PUT /-/vaults/" + VAULT_NAME + "/multipart-uploads/" + MULTIPART_UPLOAD_ID + " " + HTTP);
-      assertEquals(request.getHeader(HttpHeaders.CONTENT_RANGE), "bytes 0-4194303/*");
-      assertEquals(request.getHeader(HttpHeaders.CONTENT_LENGTH), "4194304");
+      assertThat(server.takeRequest())
+              .isPUT()
+              .isPointingTo("/-/vaults/" + VAULT_NAME + "/multipart-uploads/" + MULTIPART_UPLOAD_ID)
+              .hasHeaders(HttpHeaders.CONTENT_RANGE, HttpHeaders.CONTENT_LENGTH)
+              .withValues("bytes 0-4194303/*", "4194304");
    }
 
    // TODO: Change size to 4096 when moving to JDK 7
@@ -291,10 +301,11 @@ public class GlacierClientMockTest {
       } catch (HttpResponseException e) {
       }
 
-      RecordedRequest request = server.takeRequest();
-      assertEquals(request.getRequestLine(), "PUT /-/vaults/" + VAULT_NAME + "/multipart-uploads/" + MULTIPART_UPLOAD_ID + " " + HTTP);
-      assertEquals(request.getHeader(HttpHeaders.CONTENT_RANGE), range.buildHeader());
-      assertEquals(request.getHeader(HttpHeaders.CONTENT_LENGTH), payload.getContentMetadata().getContentLength().toString());
+      assertThat(server.takeRequest())
+              .isPUT()
+              .isPointingTo("/-/vaults/" + VAULT_NAME + "/multipart-uploads/" + MULTIPART_UPLOAD_ID)
+              .hasHeaders(HttpHeaders.CONTENT_RANGE, HttpHeaders.CONTENT_LENGTH)
+              .withValues(range.buildHeader(), payload.getContentMetadata().getContentLength().toString());
    }
 
    @Test
@@ -306,18 +317,17 @@ public class GlacierClientMockTest {
 
       HashCode partHashcode = HashCode.fromString("9bc1b2a288b26af7257a36277ae3816a7d4f16e89c1e7e77d0a5c48bad62b360");
       ImmutableMap<Integer, HashCode> map = ImmutableMap.of(
-            1, partHashcode,
-            2, partHashcode,
-            3, partHashcode,
-            4, partHashcode);
+              1, partHashcode,
+              2, partHashcode,
+              3, partHashcode,
+              4, partHashcode);
       assertThat(client.completeMultipartUpload(VAULT_NAME, MULTIPART_UPLOAD_ID, map, 8L)).isEqualTo(ARCHIVE_ID);
 
-      RecordedRequest request = server.takeRequest();
-      assertEquals(request.getRequestLine(),
-            "POST /-/vaults/" + VAULT_NAME + "/multipart-uploads/" + MULTIPART_UPLOAD_ID + " " + HTTP);
-      assertEquals(request.getHeader(GlacierHeaders.TREE_HASH),
-            "9491cb2ed1d4e7cd53215f4017c23ec4ad21d7050a1e6bb636c4f67e8cddb844");
-      assertEquals(request.getHeader(GlacierHeaders.ARCHIVE_SIZE), "8388608");
+      assertThat(server.takeRequest())
+              .isPOST()
+              .isPointingTo("/-/vaults/" + VAULT_NAME + "/multipart-uploads/" + MULTIPART_UPLOAD_ID)
+              .hasHeaders(GlacierHeaders.TREE_HASH, GlacierHeaders.ARCHIVE_SIZE)
+              .withValues("9491cb2ed1d4e7cd53215f4017c23ec4ad21d7050a1e6bb636c4f67e8cddb844", "8388608");
    }
 
    @Test
@@ -327,8 +337,9 @@ public class GlacierClientMockTest {
 
       assertTrue(client.abortMultipartUpload(VAULT_NAME, MULTIPART_UPLOAD_ID));
 
-      assertEquals(server.takeRequest().getRequestLine(),
-              "DELETE /-/vaults/" + VAULT_NAME + "/multipart-uploads/" + MULTIPART_UPLOAD_ID + " " + HTTP);
+      assertThat(server.takeRequest())
+              .isDELETE()
+              .isPointingTo("/-/vaults/" + VAULT_NAME + "/multipart-uploads/" + MULTIPART_UPLOAD_ID);
    }
 
    @Test
@@ -346,8 +357,9 @@ public class GlacierClientMockTest {
       assertThat(mpu).extracting("treeHash").containsExactly(HashCode.fromString("01d34dabf7be316472c93b1ef80721f5d4"));
       assertThat(mpu).extracting("range").containsExactly(ContentRange.fromString("4194304-8388607"));
 
-      assertEquals(server.takeRequest().getRequestLine(),
-              "GET /-/vaults/examplevault/multipart-uploads/" + MULTIPART_UPLOAD_ID + "?limit=1&marker=1001 " + HTTP);
+      assertThat(server.takeRequest())
+              .isGET()
+              .isPointingTo("/-/vaults/examplevault/multipart-uploads/" + MULTIPART_UPLOAD_ID + "?limit=1&marker=1001");
    }
 
    @Test
@@ -364,8 +376,9 @@ public class GlacierClientMockTest {
       assertThat(mpus).extracting("partSizeInBytes").containsExactly(4194304L);
       assertThat(mpus).extracting("vaultARN").containsExactly(VAULT_ARN);
 
-      assertEquals(server.takeRequest().getRequestLine(),
-              "GET /-/vaults/examplevault/multipart-uploads?limit=1&marker=" + MARKER + " " + HTTP);
+      assertThat(server.takeRequest())
+              .isGET()
+              .isPointingTo("/-/vaults/examplevault/multipart-uploads?limit=1&marker=" + MARKER);
    }
 
    @Test
@@ -378,8 +391,9 @@ public class GlacierClientMockTest {
 
       assertThat(client.listMultipartUploads(VAULT_NAME, PaginationOptions.Builder.limit(1).marker(MARKER))).isEmpty();
 
-      assertEquals(server.takeRequest().getRequestLine(),
-              "GET /-/vaults/examplevault/multipart-uploads?limit=1&marker=" + MARKER + " " + HTTP);
+      assertThat(server.takeRequest())
+              .isGET()
+              .isPointingTo("/-/vaults/examplevault/multipart-uploads?limit=1&marker=" + MARKER);
    }
 
    @Test
@@ -391,10 +405,10 @@ public class GlacierClientMockTest {
 
       ContentRange range = ContentRange.fromString("2097152-4194303");
       ArchiveRetrievalJobRequest retrieval = ArchiveRetrievalJobRequest.builder()
-            .archiveId(ARCHIVE_ID)
-            .description(DESCRIPTION)
-            .range(range)
-            .build();
+              .archiveId(ARCHIVE_ID)
+              .description(DESCRIPTION)
+              .range(range)
+              .build();
       assertThat(client.initiateJob(VAULT_NAME, retrieval)).isEqualTo(JOB_ID);
 
       RecordedRequest request = server.takeRequest();
@@ -405,7 +419,9 @@ public class GlacierClientMockTest {
       assertThat(job.getArchiveId()).isEqualTo(ARCHIVE_ID);
       assertThat(job.getType()).isEqualTo("archive-retrieval");
 
-      assertEquals(request.getRequestLine(), "POST /-/vaults/" + VAULT_NAME + "/jobs " + HTTP);
+      assertThat(request)
+              .isPOST()
+              .isPointingTo("/-/vaults/" + VAULT_NAME + "/jobs");
    }
 
    @Test
@@ -421,12 +437,12 @@ public class GlacierClientMockTest {
       String endDate = "2013-12-05T21:25:42Z";
       String format = "CSV";
       InventoryRetrievalJobRequest job = InventoryRetrievalJobRequest.builder()
-            .format(format)
-            .endDate(endDate)
-            .startDate(startDate)
-            .limit(limit)
-            .marker(marker)
-            .build();
+              .format(format)
+              .endDate(endDate)
+              .startDate(startDate)
+              .limit(limit)
+              .marker(marker)
+              .build();
       assertThat(client.initiateJob(VAULT_NAME, job)).isEqualTo(JOB_ID);
 
       RecordedRequest request = server.takeRequest();
@@ -439,7 +455,9 @@ public class GlacierClientMockTest {
       assertThat(job.getParameters().getEndDate()).isEqualTo(endDate);
       assertThat(job.getType()).isEqualTo("inventory-retrieval");
 
-      assertEquals(request.getRequestLine(), "POST /-/vaults/examplevault/jobs HTTP/1.1");
+      assertThat(request)
+              .isPOST()
+              .isPointingTo("/-/vaults/examplevault/jobs");
    }
 
    @Test
@@ -456,7 +474,9 @@ public class GlacierClientMockTest {
       assertThat(ContentRange.fromString("0-16777215")).isEqualTo(job.getRetrievalByteRange());
       assertThat(job.getVaultArn()).isEqualTo("arn:aws:glacier:us-east-1:012345678901:vaults/examplevault");
 
-      assertEquals(server.takeRequest().getRequestLine(), "GET /-/vaults/" + VAULT_NAME + "/jobs/" + JOB_ID + " " + HTTP);
+      assertThat(server.takeRequest())
+              .isGET()
+              .isPointingTo("/-/vaults/" + VAULT_NAME + "/jobs/" + JOB_ID);
    }
 
    @Test
@@ -468,10 +488,12 @@ public class GlacierClientMockTest {
       server.enqueue(mr);
 
       assertThat(client.listJobs(VAULT_NAME)).extracting("jobId").containsExactly(
-               "s4MvaNHIh6mOa1f8iY4ioG2921SDPihXxh3Kv0FBX-JbNPctpRvE4c2_BifuhdGLqEhGBNGeB6Ub-JMunR9JoVa8y1hQ",
-               "CQ_tf6fOR4jrJCL61Mfk6VM03oY8lmnWK93KK4gLig1UPAbZiN3UV4G_5nq4AfmJHQ_dOMLOX5k8ItFv0wCPN0oaz5dG");
+              "s4MvaNHIh6mOa1f8iY4ioG2921SDPihXxh3Kv0FBX-JbNPctpRvE4c2_BifuhdGLqEhGBNGeB6Ub-JMunR9JoVa8y1hQ",
+              "CQ_tf6fOR4jrJCL61Mfk6VM03oY8lmnWK93KK4gLig1UPAbZiN3UV4G_5nq4AfmJHQ_dOMLOX5k8ItFv0wCPN0oaz5dG");
 
-      assertEquals(server.takeRequest().getRequestLine(), "GET /-/vaults/examplevault/jobs HTTP/1.1");
+      assertThat(server.takeRequest())
+              .isGET()
+              .isPointingTo("/-/vaults/examplevault/jobs");
    }
 
    @Test
@@ -489,8 +511,9 @@ public class GlacierClientMockTest {
               .hasContentEqualTo(Resources.getResource(GlacierClientMockTest.class,
                       "/json/getJobOutputResponseBody.json").openStream());
 
-      assertEquals(server.takeRequest().getRequestLine(),
-              "GET /-/vaults/" + VAULT_NAME + "/jobs/" + JOB_ID + "/output " + HTTP);
+      assertThat(server.takeRequest())
+              .isGET()
+              .isPointingTo("/-/vaults/" + VAULT_NAME + "/jobs/" + JOB_ID + "/output");
    }
 
    @Test
@@ -504,10 +527,10 @@ public class GlacierClientMockTest {
       ContentRange range = ContentRange.fromString("16-32");
       client.getJobOutput(VAULT_NAME, JOB_ID, range);
 
-      RecordedRequest request = server.takeRequest();
-      assertEquals(request.getHeader("Range"), "bytes=" + range.toString());
-      assertEquals(request.getRequestLine(),
-              "GET /-/vaults/" + VAULT_NAME + "/jobs/" + JOB_ID + "/output " + HTTP);
+      assertThat(server.takeRequest())
+              .isGET()
+              .isPointingTo("/-/vaults/" + VAULT_NAME + "/jobs/" + JOB_ID + "/output")
+              .hasHeader(HttpHeaders.RANGE).withValue("bytes=" + range.toString());
    }
 
    @Test
@@ -528,5 +551,9 @@ public class GlacierClientMockTest {
       assertThat(archives).extracting("treeHash").containsExactly(
               HashCode.fromString("6b9d4cf8697bd3af6aa1b590a0b27b337da5b18988dbcc619a3e608a554a1e62"),
               HashCode.fromString("7f2fe580edb35154041fa3d4b41dd6d3adaef0c85d2ff6309f1d4b520eeecda3"));
+
+      assertThat(server.takeRequest())
+              .isGET()
+              .isPointingTo("/-/vaults/" + VAULT_NAME + "/jobs/" + JOB_ID + "/output");
    }
 }
